@@ -1,4 +1,4 @@
-# Tracy - SQL Query Assistant
+# SQL Query Assistant
 
 A full-stack application that allows users to query databases using natural language, powered by FastAPI and React.
 
