@@ -1,169 +1,247 @@
-# Web-App-React
+# Tracy - SQL Query Assistant
 
-# Spotify Frontend Clone
+A full-stack application that allows users to query databases using natural language, powered by FastAPI and React.
 
-A modern, responsive Spotify-like music player interface built with React, TypeScript, and Tailwind CSS.
+## 🏗️ Project Structure
 
-## Features
-
-### 🎵 Music Player Interface
-- **Interactive Player Controls**: Play/pause, skip, shuffle, repeat functionality
-- **Volume Control**: Adjustable volume slider with visual feedback
-- **Progress Bar**: Clickable progress bar with time display
-- **Now Playing**: Current track information with album artwork
-
-### 🎨 Modern UI/UX
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
-- **Smooth Animations**: Hover effects, transitions, and micro-interactions
-- **Spotify-like Styling**: Authentic color scheme and design patterns
-- **Custom Scrollbars**: Styled scrollbars for better visual consistency
-
-### 📱 Navigation & Content
-- **Sidebar Navigation**: Home, Search, Library, and playlist navigation
-- **Search Functionality**: Interactive search bar with placeholder text
-- **Content Sections**: 
-  - Recently played playlists
-  - Daily mixes with custom gradients
-  - Top artists showcase
-  - Featured playlists
-- **User Profile**: User avatar and account information
-
-### 🎯 Interactive Elements
-- **Hover Effects**: Cards scale and show play buttons on hover
-- **Click Handlers**: Interactive buttons and controls
-- **State Management**: Local state for player controls and UI interactions
-- **Responsive Grid**: Adaptive grid layouts for different screen sizes
-
-## Tech Stack
-
-- **React 19.1.0** - Modern React with latest features
-- **TypeScript 4.9.5** - Type-safe development
-- **Tailwind CSS 4.1.11** - Utility-first CSS framework
-- **React Scripts 5.0.1** - Create React App build tools
-
-## Getting Started
-
-### Prerequisites
-- Node.js (version 14 or higher)
-- npm or yarn package manager
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd spotify-frontend
+```
+Tracy-Project/
+├── backend/                 # FastAPI Server + Database
+│   ├── app.py              # Main FastAPI application
+│   ├── init_db.py          # Database initialization script
+│   ├── data.db             # SQLite database
+│   ├── requirements.txt    # Python dependencies
+│   └── config.py           # Configuration file
+├── frontend/               # React Application
+│   ├── src/                # React source code
+│   │   ├── components/     # React components
+│   │   ├── config/         # API configuration
+│   │   ├── services/       # API services
+│   │   └── types/          # TypeScript types
+│   ├── public/             # Static assets
+│   ├── package.json        # Node.js dependencies
+│   └── *.config.js         # Configuration files
+├── docs/                   # Documentation
+│   └── INTEGRATION_SETUP.md
+├── start-backend.bat       # Windows backend startup script
+├── start-frontend.bat      # Windows frontend startup script
+└── README.md              # This file
 ```
 
-2. Install dependencies:
+## 🚀 Quick Start
+
+### Option 1: Using Batch Files (Windows - Recommended)
+
 ```bash
+# Start the backend server
+start-backend.bat
+
+# Start the frontend (in a new terminal)
+start-frontend.bat
+```
+
+### Option 2: Manual Setup
+
+#### 1. Backend Setup (FastAPI + Database)
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Start the FastAPI server
+python app.py
+```
+
+#### 2. Frontend Setup (React)
+
+```bash
+# Navigate to frontend directory  
+cd frontend
+
+# Install Node.js dependencies
 npm install
-```
 
-3. Start the development server:
-```bash
+# Start the React development server
 npm start
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## 🌐 Network Access
 
-### Available Scripts
+### Local Access
+- **Backend API**: http://localhost:8000
+- **Frontend App**: http://localhost:3000
+- **API Documentation**: http://localhost:8000/docs
 
-- `npm start` - Runs the app in development mode
-- `npm run build` - Builds the app for production
-- `npm test` - Launches the test runner
-- `npm run eject` - Ejects from Create React App (not recommended)
+### Network Access (Same WiFi/LAN)
+The application is configured to be accessible from other devices on your network:
+- **Backend API**: http://10.16.56.77:8000
+- **Frontend App**: http://10.16.56.77:3000
+- **API Documentation**: http://10.16.56.77:8000/docs
 
-## Project Structure
+> **Note**: Replace `10.16.56.77` with your actual local IP address. To find your IP:
+> ```bash
+> ipconfig | findstr /i "IPv4"
+> ```
 
-```
-spotify-frontend/
-├── public/
-│   └── index.html          # Main HTML template
-├── src/
-│   ├── components/
-│   │   ├── DailyMixCard.tsx    # Daily mix playlist cards
-│   │   ├── Header.tsx          # Top navigation and search
-│   │   ├── Player.tsx          # Music player controls
-│   │   └── Sidebar.tsx         # Left navigation sidebar
-│   ├── App.tsx                 # Main application component
-│   ├── index.tsx               # Application entry point
-│   └── index.css               # Global styles and Tailwind imports
-├── package.json                # Dependencies and scripts
-├── tailwind.config.js          # Tailwind CSS configuration
-└── README.md                   # Project documentation
+### Firewall Configuration (if needed)
+If other devices can't connect, allow the ports through Windows Firewall:
+```powershell
+# Run PowerShell as Administrator
+netsh advfirewall firewall add rule name="React Dev Server" dir=in action=allow protocol=TCP localport=3000
+netsh advfirewall firewall add rule name="FastAPI Backend" dir=in action=allow protocol=TCP localport=8000
 ```
 
-## Component Details
+## 🔧 Features
 
-### Sidebar (`Sidebar.tsx`)
-- Spotify logo and branding
-- Main navigation (Home, Search, Library)
-- Playlist section with user playlists
-- User profile section with avatar and account info
-- Install app button
+- **Natural Language to SQL**: Convert questions into SQL queries using AI
+- **Interactive Chat Interface**: Conversational UI for database queries
+- **Real-time Results**: Display query results in interactive tables
+- **Data Export**: Download results as CSV or Excel files
+- **Network Access**: Access from multiple devices on the same network
+- **Responsive Design**: Works on desktop, tablet, and mobile devices
+- **Debug Panel**: Development tools for SQL query inspection
 
-### Header (`Header.tsx`)
-- Navigation arrows (back/forward)
-- Search bar with icon and placeholder
-- User actions (notifications, help)
-- User profile display
+## 🛠️ Technology Stack
 
-### Player (`Player.tsx`)
-- Current track information with album artwork
-- Playback controls (play/pause, skip, shuffle, repeat)
-- Progress bar with time display
-- Volume control slider
-- Interactive buttons with hover states
+### Backend
+- **FastAPI**: Modern Python web framework
+- **LangChain**: AI/ML framework for natural language processing
+- **Google Gemini**: Language model for SQL generation
+- **SQLite**: Lightweight database
+- **Pandas**: Data manipulation and analysis
+- **Uvicorn**: ASGI server
 
-### DailyMixCard (`DailyMixCard.tsx`)
-- Gradient album artwork based on color prop
-- Hover effects with play button overlay
-- Track and artist information
-- Smooth transitions and animations
+### Frontend
+- **React 19**: Latest JavaScript library for building user interfaces
+- **TypeScript**: Type-safe JavaScript
+- **Tailwind CSS**: Utility-first CSS framework
+- **Framer Motion**: Animation library
+- **Lucide React**: Icon library
+- **React Router**: Client-side routing
 
-### App (`App.tsx`)
-- Main layout with sidebar and content area
-- Multiple content sections (recently played, daily mixes, top artists)
-- Responsive grid layouts
-- Custom card components for playlists and artists
+## 🔍 API Endpoints
 
-## Styling
+- `GET /` - API information and available endpoints
+- `GET /health` - Health check and database connection status
+- `POST /query` - Execute natural language queries (generate + execute)
+- `POST /generate_sql` - Generate SQL from natural language only
+- `POST /execute_sql` - Execute SQL query directly
+- `GET /download/csv` - Download last query results as CSV
+- `GET /download/excel` - Download last query results as Excel
 
-The project uses Tailwind CSS for styling with:
-- Custom color palette matching Spotify's brand
-- Responsive design utilities
-- Custom animations and transitions
-- Utility classes for layout and spacing
+## 🔧 Configuration
 
-### Custom CSS Features
-- Line clamping for text truncation
-- Custom scrollbar styling
-- Smooth transitions for all interactive elements
-- Hover effects and micro-interactions
+### Backend Configuration
+The backend is configured in `backend/app.py`:
+- **Host**: `0.0.0.0` (accepts connections from any IP)
+- **Port**: `8000`
+- **Database**: SQLite (`data.db`)
 
-## Browser Support
+### Frontend Configuration
+API configuration is in `frontend/src/config/api.ts`:
+- **Base URL**: Configurable via environment variable or defaults to local IP
+- **Timeout**: 15 seconds
+- **Headers**: JSON content type
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
+### Environment Variables
+Create a `.env` file in the frontend directory to customize API URL:
+```
+REACT_APP_API_URL=http://your-custom-ip:8000
+```
 
-## Contributing
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**1. Port 8000 already in use**
+```bash
+# Find process using port 8000
+netstat -ano | findstr :8000
+
+# Kill the process (replace PID with actual process ID)
+taskkill /PID <PID> /F
+```
+
+**2. Cannot connect to API server**
+- Ensure backend is running: `python backend/app.py`
+- Check health endpoint: http://localhost:8000/health
+- Verify firewall settings if accessing from network
+
+**3. Frontend won't start**
+```bash
+# Clear npm cache and reinstall
+cd frontend
+npm cache clean --force
+rm -rf node_modules package-lock.json
+npm install
+```
+
+**4. Database errors**
+```bash
+# Reset database
+cd backend
+python init_db.py
+```
+
+## 🏃‍♂️ Development
+
+### Backend Development
+```bash
+cd backend
+python app.py
+# API docs available at: http://localhost:8000/docs
+```
+
+### Frontend Development
+```bash
+cd frontend
+npm start
+# App available at: http://localhost:3000
+```
+
+### Database Management
+The SQLite database (`backend/data.db`) contains sample data with:
+- **customers** table: Customer information
+- **orders** table: Order records
+
+To reset or modify the database:
+```bash
+cd backend
+python init_db.py
+```
+
+## 📚 Documentation
+
+- [Integration Setup Guide](docs/INTEGRATION_SETUP.md) - Detailed setup instructions
+- [API Documentation](http://localhost:8000/docs) - FastAPI auto-generated docs (when server is running)
+
+## 🚀 Deployment Notes
+
+### Local Network Access
+- Backend binds to `0.0.0.0:8000` for network accessibility
+- Frontend configured to connect via local IP address
+- Use batch files for easy startup on Windows
+
+### Production Considerations
+- Set proper environment variables
+- Configure HTTPS for secure communication
+- Use proper database for production (PostgreSQL, MySQL)
+- Set up proper CORS policies
+- Consider using Docker for containerization
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Make your changes
+4. Test both frontend and backend
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Submit a pull request
 
-## License
+## 📄 License
 
-This project is for educational purposes and is not affiliated with Spotify.
-
-## Acknowledgments
-
-- Design inspired by Spotify's web interface
-- Icons from Heroicons
-- Images from Unsplash
-- Built with Create React App and Tailwind CSS 
+This project is licensed under the MIT License. 
