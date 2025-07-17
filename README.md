@@ -2,45 +2,7 @@
 
 A full-stack application that allows users to query databases using natural language, powered by FastAPI and React.
 
-## 🏗️ Project Structure
-
-```
-Tracy-Project/
-├── backend/                 # FastAPI Server + Database
-│   ├── app.py              # Main FastAPI application
-│   ├── init_db.py          # Database initialization script
-│   ├── data.db             # SQLite database
-│   ├── requirements.txt    # Python dependencies
-│   └── config.py           # Configuration file
-├── frontend/               # React Application
-│   ├── src/                # React source code
-│   │   ├── components/     # React components
-│   │   ├── config/         # API configuration
-│   │   ├── services/       # API services
-│   │   └── types/          # TypeScript types
-│   ├── public/             # Static assets
-│   ├── package.json        # Node.js dependencies
-│   └── *.config.js         # Configuration files
-├── docs/                   # Documentation
-│   └── INTEGRATION_SETUP.md
-├── start-backend.bat       # Windows backend startup script
-├── start-frontend.bat      # Windows frontend startup script
-└── README.md              # This file
-```
-
 ## 🚀 Quick Start
-
-### Option 1: Using Batch Files (Windows - Recommended)
-
-```bash
-# Start the backend server
-start-backend.bat
-
-# Start the frontend (in a new terminal)
-start-frontend.bat
-```
-
-### Option 2: Manual Setup
 
 #### 1. Backend Setup (FastAPI + Database)
 
@@ -74,12 +36,6 @@ npm start
 - **Backend API**: http://localhost:8000
 - **Frontend App**: http://localhost:3000
 - **API Documentation**: http://localhost:8000/docs
-
-### Network Access (Same WiFi/LAN)
-The application is configured to be accessible from other devices on your network:
-- **Backend API**: http://10.16.56.77:8000
-- **Frontend App**: http://10.16.56.77:3000
-- **API Documentation**: http://10.16.56.77:8000/docs
 
 > **Note**: Replace `10.16.56.77` with your actual local IP address. To find your IP:
 > ```bash
@@ -232,16 +188,3 @@ python init_db.py
 - Set up proper CORS policies
 - Consider using Docker for containerization
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Test both frontend and backend
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License. 
