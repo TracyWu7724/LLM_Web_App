@@ -1,303 +1,253 @@
-export interface RecentQuery {
-  id: string;
-  query: string;
-  timestamp: Date;
-  executionCount: number;
-  lastExecuted: Date;
-  favorite?: boolean;
+import React, { useState, useRef } from 'react';
+import { Upload, FileSpreadsheet, FileText, X } from "lucide-react";
+import TablePreview from './TablePreview';
+import { ApiService } from '../services/api';
+
+interface SearchBarProps {
+  onSearch: (query: string, uploadedTable?: string) => void;
+  isLoading: boolean;
 }
 
-export interface QueryHistorySettings {
-  maxRecentQueries: number;
-  enableAutoSave: boolean;
-  enableFavorites: boolean;
-}
+const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedTableName, setUploadedTableName] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [tablePreview, setTablePreview] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-class QueryHistoryService {
-  private readonly STORAGE_KEY = 'query_history';
-  private readonly SETTINGS_KEY = 'query_history_settings';
-  private readonly DEFAULT_SETTINGS: QueryHistorySettings = {
-    maxRecentQueries: 20,
-    enableAutoSave: true,
-    enableFavorites: true,
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      onSearch(searchQuery.trim(), uploadedTableName || undefined);
+    }
   };
 
-  private cache: RecentQuery[] | null = null;
-  private settings: QueryHistorySettings;
-
-  constructor() {
-    this.settings = this.loadSettings();
-  }
-
-  /**
-   * Add a new query to recent history
-   */
-  addQuery(query: string): RecentQuery {
-    if (!this.settings.enableAutoSave || !query.trim()) {
-      throw new Error('Auto-save disabled or empty query');
+  // Function to get the appropriate file icon based on file type
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.toLowerCase().split('.').pop();
+    if (extension === 'csv') {
+      return <FileText className="w-5 h-5 text-green-600" />;
+    } else if (extension === 'xlsx' || extension === 'xls') {
+      return <FileSpreadsheet className="w-5 h-5 text-green-600" />;
     }
+    return <FileText className="w-5 h-5 text-green-600" />;
+  };
 
-    const queries = this.getRecentQueries();
-    const normalizedQuery = query.trim().toLowerCase();
-    
-    // Check if query already exists
-    const existingQueryIndex = queries.findIndex(
-      q => q.query.toLowerCase() === normalizedQuery
-    );
+  // Function to format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
-    let updatedQuery: RecentQuery;
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    if (existingQueryIndex >= 0) {
-      // Update existing query
-      updatedQuery = {
-        ...queries[existingQueryIndex],
-        query: query.trim(), // Keep original casing
-        executionCount: queries[existingQueryIndex].executionCount + 1,
-        lastExecuted: new Date(),
-      };
-      
-      // Remove from current position and add to beginning
-      queries.splice(existingQueryIndex, 1);
-      queries.unshift(updatedQuery);
-    } else {
-      // Create new query
-      updatedQuery = {
-        id: this.generateId(),
-        query: query.trim(),
-        timestamp: new Date(),
-        executionCount: 1,
-        lastExecuted: new Date(),
-        favorite: false,
-      };
-      
-      // Add to beginning
-      queries.unshift(updatedQuery);
-    }
-
-    // Trim to max size
-    if (queries.length > this.settings.maxRecentQueries) {
-      queries.splice(this.settings.maxRecentQueries);
-    }
-
-    this.saveQueries(queries);
-    return updatedQuery;
-  }
-
-  /**
-   * Get all recent queries sorted by most recent
-   */
-  getRecentQueries(): RecentQuery[] {
-    if (this.cache === null) {
-      this.cache = this.loadQueries();
-    }
-    return [...this.cache];
-  }
-
-  /**
-   * Get frequent queries sorted by execution count
-   */
-  getFrequentQueries(limit: number = 10): RecentQuery[] {
-    return this.getRecentQueries()
-      .filter(q => q.executionCount > 1)
-      .sort((a, b) => b.executionCount - a.executionCount)
-      .slice(0, limit);
-  }
-
-  /**
-   * Get favorite queries
-   */
-  getFavoriteQueries(): RecentQuery[] {
-    if (!this.settings.enableFavorites) return [];
-    
-    return this.getRecentQueries()
-      .filter(q => q.favorite)
-      .sort((a, b) => b.lastExecuted.getTime() - a.lastExecuted.getTime());
-  }
-
-  /**
-   * Search queries by text
-   */
-  searchQueries(searchTerm: string, limit: number = 10): RecentQuery[] {
-    if (!searchTerm.trim()) return [];
-    
-    const term = searchTerm.toLowerCase();
-    return this.getRecentQueries()
-      .filter(q => q.query.toLowerCase().includes(term))
-      .slice(0, limit);
-  }
-
-  /**
-   * Toggle favorite status of a query
-   */
-  toggleFavorite(queryId: string): boolean {
-    if (!this.settings.enableFavorites) return false;
-    
-    const queries = this.getRecentQueries();
-    const queryIndex = queries.findIndex(q => q.id === queryId);
-    
-    if (queryIndex >= 0) {
-      queries[queryIndex].favorite = !queries[queryIndex].favorite;
-      this.saveQueries(queries);
-      return queries[queryIndex].favorite!;
-    }
-    
-    return false;
-  }
-
-  /**
-   * Remove a specific query from history
-   */
-  removeQuery(queryId: string): boolean {
-    const queries = this.getRecentQueries();
-    const queryIndex = queries.findIndex(q => q.id === queryId);
-    
-    if (queryIndex >= 0) {
-      queries.splice(queryIndex, 1);
-      this.saveQueries(queries);
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * Clear all query history
-   */
-  clearHistory(): void {
-    this.cache = [];
-    localStorage.removeItem(this.STORAGE_KEY);
-  }
-
-  /**
-   * Clear only non-favorite queries
-   */
-  clearNonFavorites(): void {
-    if (!this.settings.enableFavorites) {
-      this.clearHistory();
+    // Check file type
+    const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+      alert('Please upload a CSV or Excel file');
       return;
     }
-    
-    const favorites = this.getFavoriteQueries();
-    this.saveQueries(favorites);
-  }
 
-  /**
-   * Get query by ID
-   */
-  getQueryById(queryId: string): RecentQuery | null {
-    return this.getRecentQueries().find(q => q.id === queryId) || null;
-  }
-
-  /**
-   * Update settings
-   */
-  updateSettings(newSettings: Partial<QueryHistorySettings>): void {
-    this.settings = { ...this.settings, ...newSettings };
-    localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(this.settings));
-    
-    // Apply max query limit if changed
-    if (newSettings.maxRecentQueries !== undefined) {
-      const queries = this.getRecentQueries();
-      if (queries.length > newSettings.maxRecentQueries) {
-        const trimmedQueries = queries.slice(0, newSettings.maxRecentQueries);
-        this.saveQueries(trimmedQueries);
-      }
-    }
-  }
-
-  /**
-   * Get current settings
-   */
-  getSettings(): QueryHistorySettings {
-    return { ...this.settings };
-  }
-
-  /**
-   * Export query history as JSON
-   */
-  exportHistory(): string {
-    return JSON.stringify({
-      queries: this.getRecentQueries(),
-      settings: this.settings,
-      exportDate: new Date().toISOString(),
-    }, null, 2);
-  }
-
-  /**
-   * Import query history from JSON
-   */
-  importHistory(jsonData: string): boolean {
+    setIsUploading(true);
     try {
-      const data = JSON.parse(jsonData);
-      
-      if (data.queries && Array.isArray(data.queries)) {
-        // Validate and convert date strings back to Date objects
-        const queries: RecentQuery[] = data.queries.map((q: any) => ({
-          ...q,
-          timestamp: new Date(q.timestamp),
-          lastExecuted: new Date(q.lastExecuted),
-        }));
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('http://10.16.56.77:8000/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUploadedFile(file);
+        setUploadedTableName(result.table_name);
         
-        this.saveQueries(queries);
-        
-        if (data.settings) {
-          this.updateSettings(data.settings);
+        // Fetch table preview after successful upload
+        try {
+          const preview = await ApiService.getTablePreview(result.table_name);
+          setTablePreview(preview);
+        } catch (previewError) {
+          console.error('Failed to fetch table preview:', previewError);
         }
-        
-        return true;
+      } else {
+        const error = await response.text();
+        alert(`Upload failed: ${error}`);
       }
     } catch (error) {
-      console.error('Failed to import query history:', error);
-    }
-    
-    return false;
-  }
-
-  private loadQueries(): RecentQuery[] {
-    try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
-      if (stored) {
-        const queries = JSON.parse(stored);
-        // Convert date strings back to Date objects
-        return queries.map((q: any) => ({
-          ...q,
-          timestamp: new Date(q.timestamp),
-          lastExecuted: new Date(q.lastExecuted),
-        }));
+      console.error('Upload error:', error);
+      alert('Upload failed. Please try again.');
+    } finally {
+      setIsUploading(false);
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
-    } catch (error) {
-      console.error('Failed to load query history:', error);
     }
-    
-    return [];
-  }
+  };
 
-  private saveQueries(queries: RecentQuery[]): void {
-    try {
-      this.cache = queries;
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(queries));
-    } catch (error) {
-      console.error('Failed to save query history:', error);
+  const handleFileButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const removeUploadedFile = () => {
+    setUploadedFile(null);
+    setUploadedTableName(null);
+    setTablePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
-  }
+  };
 
-  private loadSettings(): QueryHistorySettings {
-    try {
-      const stored = localStorage.getItem(this.SETTINGS_KEY);
-      if (stored) {
-        return { ...this.DEFAULT_SETTINGS, ...JSON.parse(stored) };
-      }
-    } catch (error) {
-      console.error('Failed to load query history settings:', error);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSearch(e as any);
     }
-    
-    return { ...this.DEFAULT_SETTINGS };
-  }
+  };
 
-  private generateId(): string {
-    return `query_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-  }
-}
+  return (
+    <div className="flex flex-col items-center justify-center mb-12 py-8 relative w-full max-w-6xl">
+      {/* ChatGPT-like File Upload Display */}
+      {uploadedFile && (
+        <div className="mb-4 max-w-5xl w-full">
+          <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm hover:shadow-md transition-shadow">
+            {/* File Type Icon */}
+            <div className="flex-shrink-0">
+              {getFileIcon(uploadedFile.name)}
+            </div>
+            
+            {/* File Info */}
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-medium text-gray-900 truncate">
+                {uploadedFile.name}
+              </span>
+              <span className="text-xs text-gray-500">
+                {formatFileSize(uploadedFile.size)}
+              </span>
+            </div>
+            
+            {/* Remove Button */}
+            <button
+              onClick={removeUploadedFile}
+              className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+              title="Remove file"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
-// Export singleton instance
-export const queryHistoryService = new QueryHistoryService(); 
+      <form onSubmit={handleSearch} className="w-full">
+        {/* Advanced Search Bar with Gradient Glow Effect - EXTRA LONG */}
+        <div 
+          className="relative mx-auto max-w-5xl"
+          style={{
+            filter: 'drop-shadow(0 10px 20px rgba(17, 61, 115, 0.1))',
+          }}
+        >
+          <div 
+            className="relative bg-white rounded-2xl border-4 overflow-hidden transition-all duration-300 hover:scale-[1.02] transform"
+            style={{ 
+              borderColor: 'rgba(17, 61, 115, 0.2)',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,255,0.95) 100%)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 20px 40px rgba(17, 61, 115, 0.1), 0 1px 3px rgba(17, 61, 115, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
+            }}
+          >
+            
+            <div className="flex items-center px-10 py-3 gap-4">
+              {/* Command Icon */}
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              
+              {/* Search Input - LONG & NARROW */}
+              <textarea
+                className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none text-lg placeholder:text-gray-400 resize-none min-h-[50px] py-3 leading-relaxed w-full"
+                placeholder="Enter your text or upload a file for data query..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                style={{ fontFamily: 'inherit', minWidth: '0' }}
+              />
+
+              {/* File Upload Button - Integrated */}
+              <div className="flex-shrink-0">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={handleFileButtonClick}
+                  disabled={isUploading}
+                  className="p-2 text-gray-500 hover:text-blue-600 transition-colors disabled:opacity-50"
+                  title="Upload CSV or Excel file"
+                >
+                  {isUploading ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  ) : (
+                    <Upload className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+              
+              {/* Execute Button - COMPACT */}
+              <button 
+                type="submit"
+                disabled={isLoading || !searchQuery.trim()}
+                className="inline-flex items-center gap-2 px-6 py-3 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-base shadow-xl hover:shadow-2xl flex-shrink-0"
+                style={{ 
+                  backgroundColor: '#113D73',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0e3560'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#113D73'}
+              >
+                {isLoading ? (
+                  <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                )}
+                Execute
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {/* Table Preview - Below Search Bar */}
+      {tablePreview && (
+        <div className="mt-6 max-w-5xl w-full">
+          <TablePreview
+            tableName={tablePreview.table_name}
+            columns={tablePreview.columns}
+            rows={tablePreview.rows.slice(0, 2)}
+            totalRows={tablePreview.total_rows}
+            fileName={uploadedFile?.name}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SearchBar; 
