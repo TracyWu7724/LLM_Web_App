@@ -1,93 +1,303 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+export interface RecentQuery {
+  id: string;
+  query: string;
+  timestamp: Date;
+  executionCount: number;
+  lastExecuted: Date;
+  favorite?: boolean;
+}
 
-const Sidebar: React.FC = () => {
-  const navigate = useNavigate();
+export interface QueryHistorySettings {
+  maxRecentQueries: number;
+  enableAutoSave: boolean;
+  enableFavorites: boolean;
+}
 
-  const handleQueryClick = (query: string) => {
-    navigate(`/chat?query=${encodeURIComponent(query)}`);
+class QueryHistoryService {
+  private readonly STORAGE_KEY = 'query_history';
+  private readonly SETTINGS_KEY = 'query_history_settings';
+  private readonly DEFAULT_SETTINGS: QueryHistorySettings = {
+    maxRecentQueries: 20,
+    enableAutoSave: true,
+    enableFavorites: true,
   };
 
-  const frequentQueries = [
-    "Show me all employee records",
-    "What is the total spending by department?",
-    "How many requests were made by each originator?",
-    "Show me all completed requests"
-  ];
+  private cache: RecentQuery[] | null = null;
+  private settings: QueryHistorySettings;
 
-  const recentQueries = [
-    "Show me Q3 2023 employee requests",
-    "What is the average spending by category?",
-    "Show me all high value requests above $50,000",
-    "What is the status breakdown of all requests?"
-  ];
+  constructor() {
+    this.settings = this.loadSettings();
+  }
 
-  return (
-    <aside className="w-64 bg-gray-100 p-8 flex flex-col space-y-6 text-gray-700 min-h-screen">
-      {/* Logo */}
-      <div className="flex items-center space-x-2">
-        <img 
-          src="/Skyworks_logo.PNG" 
-          alt="Skyworks Logo" 
-          className="h-13 w-auto"
-        />
-      </div>
+  /**
+   * Add a new query to recent history
+   */
+  addQuery(query: string): RecentQuery {
+    if (!this.settings.enableAutoSave || !query.trim()) {
+      throw new Error('Auto-save disabled or empty query');
+    }
 
-      {/* Main Navigation */}
-      <nav className="flex flex-col space-y-8">
-        <div className="space-y-2">
-          <button 
-            onClick={() => navigate('/')}
-            className="flex items-center space-x-3 hover:text-gray-900 transition-colors w-full text-left"
-          >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-            </svg>
-            <span> New Data Query</span>
-          </button>
-        </div>
+    const queries = this.getRecentQueries();
+    const normalizedQuery = query.trim().toLowerCase();
+    
+    // Check if query already exists
+    const existingQueryIndex = queries.findIndex(
+      q => q.query.toLowerCase() === normalizedQuery
+    );
+
+    let updatedQuery: RecentQuery;
+
+    if (existingQueryIndex >= 0) {
+      // Update existing query
+      updatedQuery = {
+        ...queries[existingQueryIndex],
+        query: query.trim(), // Keep original casing
+        executionCount: queries[existingQueryIndex].executionCount + 1,
+        lastExecuted: new Date(),
+      };
+      
+      // Remove from current position and add to beginning
+      queries.splice(existingQueryIndex, 1);
+      queries.unshift(updatedQuery);
+    } else {
+      // Create new query
+      updatedQuery = {
+        id: this.generateId(),
+        query: query.trim(),
+        timestamp: new Date(),
+        executionCount: 1,
+        lastExecuted: new Date(),
+        favorite: false,
+      };
+      
+      // Add to beginning
+      queries.unshift(updatedQuery);
+    }
+
+    // Trim to max size
+    if (queries.length > this.settings.maxRecentQueries) {
+      queries.splice(this.settings.maxRecentQueries);
+    }
+
+    this.saveQueries(queries);
+    return updatedQuery;
+  }
+
+  /**
+   * Get all recent queries sorted by most recent
+   */
+  getRecentQueries(): RecentQuery[] {
+    if (this.cache === null) {
+      this.cache = this.loadQueries();
+    }
+    return [...this.cache];
+  }
+
+  /**
+   * Get frequent queries sorted by execution count
+   */
+  getFrequentQueries(limit: number = 10): RecentQuery[] {
+    return this.getRecentQueries()
+      .filter(q => q.executionCount > 1)
+      .sort((a, b) => b.executionCount - a.executionCount)
+      .slice(0, limit);
+  }
+
+  /**
+   * Get favorite queries
+   */
+  getFavoriteQueries(): RecentQuery[] {
+    if (!this.settings.enableFavorites) return [];
+    
+    return this.getRecentQueries()
+      .filter(q => q.favorite)
+      .sort((a, b) => b.lastExecuted.getTime() - a.lastExecuted.getTime());
+  }
+
+  /**
+   * Search queries by text
+   */
+  searchQueries(searchTerm: string, limit: number = 10): RecentQuery[] {
+    if (!searchTerm.trim()) return [];
+    
+    const term = searchTerm.toLowerCase();
+    return this.getRecentQueries()
+      .filter(q => q.query.toLowerCase().includes(term))
+      .slice(0, limit);
+  }
+
+  /**
+   * Toggle favorite status of a query
+   */
+  toggleFavorite(queryId: string): boolean {
+    if (!this.settings.enableFavorites) return false;
+    
+    const queries = this.getRecentQueries();
+    const queryIndex = queries.findIndex(q => q.id === queryId);
+    
+    if (queryIndex >= 0) {
+      queries[queryIndex].favorite = !queries[queryIndex].favorite;
+      this.saveQueries(queries);
+      return queries[queryIndex].favorite!;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Remove a specific query from history
+   */
+  removeQuery(queryId: string): boolean {
+    const queries = this.getRecentQueries();
+    const queryIndex = queries.findIndex(q => q.id === queryId);
+    
+    if (queryIndex >= 0) {
+      queries.splice(queryIndex, 1);
+      this.saveQueries(queries);
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Clear all query history
+   */
+  clearHistory(): void {
+    this.cache = [];
+    localStorage.removeItem(this.STORAGE_KEY);
+  }
+
+  /**
+   * Clear only non-favorite queries
+   */
+  clearNonFavorites(): void {
+    if (!this.settings.enableFavorites) {
+      this.clearHistory();
+      return;
+    }
+    
+    const favorites = this.getFavoriteQueries();
+    this.saveQueries(favorites);
+  }
+
+  /**
+   * Get query by ID
+   */
+  getQueryById(queryId: string): RecentQuery | null {
+    return this.getRecentQueries().find(q => q.id === queryId) || null;
+  }
+
+  /**
+   * Update settings
+   */
+  updateSettings(newSettings: Partial<QueryHistorySettings>): void {
+    this.settings = { ...this.settings, ...newSettings };
+    localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(this.settings));
+    
+    // Apply max query limit if changed
+    if (newSettings.maxRecentQueries !== undefined) {
+      const queries = this.getRecentQueries();
+      if (queries.length > newSettings.maxRecentQueries) {
+        const trimmedQueries = queries.slice(0, newSettings.maxRecentQueries);
+        this.saveQueries(trimmedQueries);
+      }
+    }
+  }
+
+  /**
+   * Get current settings
+   */
+  getSettings(): QueryHistorySettings {
+    return { ...this.settings };
+  }
+
+  /**
+   * Export query history as JSON
+   */
+  exportHistory(): string {
+    return JSON.stringify({
+      queries: this.getRecentQueries(),
+      settings: this.settings,
+      exportDate: new Date().toISOString(),
+    }, null, 2);
+  }
+
+  /**
+   * Import query history from JSON
+   */
+  importHistory(jsonData: string): boolean {
+    try {
+      const data = JSON.parse(jsonData);
+      
+      if (data.queries && Array.isArray(data.queries)) {
+        // Validate and convert date strings back to Date objects
+        const queries: RecentQuery[] = data.queries.map((q: any) => ({
+          ...q,
+          timestamp: new Date(q.timestamp),
+          lastExecuted: new Date(q.lastExecuted),
+        }));
         
-        {/* Frequently Searched */}
-        <div className="space-y-2">
-          <div className="flex items-center space-x-3">
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-            </svg>
-            <span>Frequently Searched</span>
-          </div>
-          {frequentQueries.map((query, index) => (
-            <button
-              key={index}
-              onClick={() => handleQueryClick(query)}
-              className="block hover:text-gray-900 hover:bg-gray-200 transition-colors text-sm pl-9 py-1 rounded w-full text-left"
-            >
-              {query.length > 35 ? `${query.substring(0, 35)}...` : query}
-            </button>
-          ))}
-        </div>
+        this.saveQueries(queries);
         
-        {/* Recent Queries */}
-        <div className="space-y-2">
-          <div className="flex items-center space-x-3">
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-              <path fillRule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 001 1h6a1 1 0 001-1V3a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
-            </svg>
-            <span>Recent Queries</span>
-          </div>
-          {recentQueries.map((query, index) => (
-            <button
-              key={index}
-              onClick={() => handleQueryClick(query)}
-              className="block hover:text-gray-900 hover:bg-gray-200 transition-colors text-sm pl-9 py-1 rounded w-full text-left"
-            >
-              {query.length > 35 ? `${query.substring(0, 35)}...` : query}
-            </button>
-          ))}
-        </div>
-      </nav>
-    </aside>
-  );
-};
+        if (data.settings) {
+          this.updateSettings(data.settings);
+        }
+        
+        return true;
+      }
+    } catch (error) {
+      console.error('Failed to import query history:', error);
+    }
+    
+    return false;
+  }
 
-export default Sidebar; 
+  private loadQueries(): RecentQuery[] {
+    try {
+      const stored = localStorage.getItem(this.STORAGE_KEY);
+      if (stored) {
+        const queries = JSON.parse(stored);
+        // Convert date strings back to Date objects
+        return queries.map((q: any) => ({
+          ...q,
+          timestamp: new Date(q.timestamp),
+          lastExecuted: new Date(q.lastExecuted),
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to load query history:', error);
+    }
+    
+    return [];
+  }
+
+  private saveQueries(queries: RecentQuery[]): void {
+    try {
+      this.cache = queries;
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(queries));
+    } catch (error) {
+      console.error('Failed to save query history:', error);
+    }
+  }
+
+  private loadSettings(): QueryHistorySettings {
+    try {
+      const stored = localStorage.getItem(this.SETTINGS_KEY);
+      if (stored) {
+        return { ...this.DEFAULT_SETTINGS, ...JSON.parse(stored) };
+      }
+    } catch (error) {
+      console.error('Failed to load query history settings:', error);
+    }
+    
+    return { ...this.DEFAULT_SETTINGS };
+  }
+
+  private generateId(): string {
+    return `query_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  }
+}
+
+// Export singleton instance
+export const queryHistoryService = new QueryHistoryService(); 
