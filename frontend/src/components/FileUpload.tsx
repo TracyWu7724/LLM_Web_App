@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, File, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Upload, FileSpreadsheet, FileText, CheckCircle, XCircle, AlertCircle, X, File as FileIcon } from "lucide-react";
+import { getApiUrl } from "../config/api";
 
 interface UploadStatus {
   type: 'idle' | 'uploading' | 'success' | 'error';
@@ -15,7 +16,28 @@ interface FileUploadProps {
 const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>({ type: 'idle' });
   const [dragActive, setDragActive] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Function to get the appropriate file icon based on file type
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.toLowerCase().split('.').pop();
+    if (extension === 'csv') {
+      return <FileText className="w-5 h-5 text-green-600" />;
+    } else if (extension === 'xlsx' || extension === 'xls') {
+      return <FileSpreadsheet className="w-5 h-5 text-green-600" />;
+    }
+    return <FileText className="w-5 h-5 text-green-600" />;
+  };
+
+  // Function to format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -84,7 +106,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://10.16.56.77:8000/upload-file', {
+      const response = await fetch(getApiUrl('/upload'), {
         method: 'POST',
         body: formData,
       });
@@ -95,9 +117,10 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
       }
 
       const result = await response.json();
+      setUploadedFile(file);
       setUploadStatus({
         type: 'success',
-        message: `Successfully uploaded ${result.rows_inserted} rows to table "${result.table_name}"`,
+        message: `Successfully uploaded ${result.row_count} rows to table "${result.table_name}"`,
         fileName: file.name
       });
 
@@ -126,6 +149,15 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
 
   const resetStatus = () => {
     setUploadStatus({ type: 'idle' });
+    setUploadedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeUploadedFile = () => {
+    setUploadedFile(null);
+    setUploadStatus({ type: 'idle' });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -133,6 +165,37 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
 
   return (
     <div className="w-full max-w-2xl mx-auto mb-8">
+      {/* ChatGPT-like File Display */}
+      {uploadedFile && uploadStatus.type === 'success' && (
+        <div className="mb-4">
+          <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm hover:shadow-md transition-shadow">
+            {/* File Type Icon */}
+            <div className="flex-shrink-0">
+              {getFileIcon(uploadedFile.name)}
+            </div>
+            
+            {/* File Info */}
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-medium text-gray-900 truncate">
+                {uploadedFile.name}
+              </span>
+              <span className="text-xs text-gray-500">
+                {formatFileSize(uploadedFile.size)} • Uploaded successfully
+              </span>
+            </div>
+            
+            {/* Remove Button */}
+            <button
+              onClick={removeUploadedFile}
+              className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+              title="Remove file"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         className={`relative border-2 border-dashed rounded-2xl p-8 transition-all duration-300 ${
           dragActive 
@@ -176,7 +239,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
             whileTap={{ scale: 0.95 }}
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <File className="w-5 h-5" />
+            <FileIcon className="w-5 h-5" />
             Choose File
           </motion.button>
 
