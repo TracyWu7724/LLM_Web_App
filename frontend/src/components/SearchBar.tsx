@@ -1,21 +1,107 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useRef } from 'react';
+import { Upload, FileSpreadsheet, FileText, X } from "lucide-react";
+import TablePreview from './TablePreview';
+import { ApiService } from '../services/api';
 
-const SearchBar: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+interface SearchBarProps {
+  onSearch: (query: string, uploadedTable?: string) => void;
+  isLoading: boolean;
+}
 
-  const handleSearch = async (e: React.FormEvent) => {
+const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedTableName, setUploadedTableName] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [tablePreview, setTablePreview] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      setIsLoading(true);
-      console.log("Navigating to chat with query:", searchQuery);
-      
-      // Navigate to chat page with the query as a URL parameter
-      navigate(`/chat?query=${encodeURIComponent(searchQuery)}`);
-      
-      setIsLoading(false);
+      onSearch(searchQuery.trim(), uploadedTableName || undefined);
+    }
+  };
+
+  // Function to get the appropriate file icon based on file type
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.toLowerCase().split('.').pop();
+    if (extension === 'csv') {
+      return <FileText className="w-5 h-5 text-green-600" />;
+    } else if (extension === 'xlsx' || extension === 'xls') {
+      return <FileSpreadsheet className="w-5 h-5 text-green-600" />;
+    }
+    return <FileText className="w-5 h-5 text-green-600" />;
+  };
+
+  // Function to format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+      alert('Please upload a CSV or Excel file');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('http://10.16.56.77:8000/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUploadedFile(file);
+        setUploadedTableName(result.table_name);
+        
+        // Fetch table preview after successful upload
+        try {
+          const preview = await ApiService.getTablePreview(result.table_name);
+          setTablePreview(preview);
+        } catch (previewError) {
+          console.error('Failed to fetch table preview:', previewError);
+        }
+      } else {
+        const error = await response.text();
+        alert(`Upload failed: ${error}`);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Upload failed. Please try again.');
+    } finally {
+      setIsUploading(false);
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleFileButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const removeUploadedFile = () => {
+    setUploadedFile(null);
+    setUploadedTableName(null);
+    setTablePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -28,6 +114,37 @@ const SearchBar: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center justify-center mb-12 py-8 relative w-full max-w-6xl">
+      {/* ChatGPT-like File Upload Display */}
+      {uploadedFile && (
+        <div className="mb-4 max-w-5xl w-full">
+          <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm hover:shadow-md transition-shadow">
+            {/* File Type Icon */}
+            <div className="flex-shrink-0">
+              {getFileIcon(uploadedFile.name)}
+            </div>
+            
+            {/* File Info */}
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-medium text-gray-900 truncate">
+                {uploadedFile.name}
+              </span>
+              <span className="text-xs text-gray-500">
+                {formatFileSize(uploadedFile.size)}
+              </span>
+            </div>
+            
+            {/* Remove Button */}
+            <button
+              onClick={removeUploadedFile}
+              className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+              title="Remove file"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSearch} className="w-full">
         {/* Advanced Search Bar with Gradient Glow Effect - EXTRA LONG */}
         <div 
@@ -57,13 +174,37 @@ const SearchBar: React.FC = () => {
               {/* Search Input - LONG & NARROW */}
               <textarea
                 className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none text-lg placeholder:text-gray-400 resize-none min-h-[50px] py-3 leading-relaxed w-full"
-                placeholder="Enter your text for data query..."
+                placeholder="Enter your text or upload a file for data query..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 rows={1}
                 style={{ fontFamily: 'inherit', minWidth: '0' }}
               />
+
+              {/* File Upload Button - Integrated */}
+              <div className="flex-shrink-0">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={handleFileButtonClick}
+                  disabled={isUploading}
+                  className="p-2 text-gray-500 hover:text-blue-600 transition-colors disabled:opacity-50"
+                  title="Upload CSV or Excel file"
+                >
+                  {isUploading ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  ) : (
+                    <Upload className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
               
               {/* Execute Button - COMPACT */}
               <button 
@@ -92,6 +233,19 @@ const SearchBar: React.FC = () => {
           </div>
         </div>
       </form>
+
+      {/* Table Preview - Below Search Bar */}
+      {tablePreview && (
+        <div className="mt-6 max-w-5xl w-full">
+          <TablePreview
+            tableName={tablePreview.table_name}
+            columns={tablePreview.columns}
+            rows={tablePreview.rows.slice(0, 2)}
+            totalRows={tablePreview.total_rows}
+            fileName={uploadedFile?.name}
+          />
+        </div>
+      )}
     </div>
   );
 };
