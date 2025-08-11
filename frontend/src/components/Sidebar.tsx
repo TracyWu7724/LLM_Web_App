@@ -1,253 +1,157 @@
-import React, { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, FileText, X } from "lucide-react";
-import TablePreview from './TablePreview';
-import { ApiService } from '../services/api';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
-interface SearchBarProps {
-  onSearch: (query: string, uploadedTable?: string) => void;
-  isLoading: boolean;
+interface RecentQuery {
+  query_text: string;
+  created_at: string;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ onSearch, isLoading }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [uploadedTableName, setUploadedTableName] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [tablePreview, setTablePreview] = useState<any>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+interface TableInfo {
+  name: string;
+  columns: { name: string; type: string }[];
+  row_count: number;
+  is_uploaded: boolean;
+}
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      onSearch(searchQuery.trim(), uploadedTableName || undefined);
-    }
-  };
+const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
+  const [recentQueries, setRecentQueries] = useState<RecentQuery[]>([]);
+  const [tables, setTables] = useState<TableInfo[]>([]);
 
-  // Function to get the appropriate file icon based on file type
-  const getFileIcon = (fileName: string) => {
-    const extension = fileName.toLowerCase().split('.').pop();
-    if (extension === 'csv') {
-      return <FileText className="w-5 h-5 text-green-600" />;
-    } else if (extension === 'xlsx' || extension === 'xls') {
-      return <FileSpreadsheet className="w-5 h-5 text-green-600" />;
-    }
-    return <FileText className="w-5 h-5 text-green-600" />;
-  };
+  // Fetch recent queries and tables from database on component mount
+  useEffect(() => {
+    fetchRecentQueries();
+    fetchTables();
+  }, []);
 
-  // Function to format file size
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Check file type
-    const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-    if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
-      alert('Please upload a CSV or Excel file');
-      return;
-    }
-
-    setIsUploading(true);
+  const fetchRecentQueries = async () => {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('http://10.16.56.77:8000/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const response = await fetch('http://10.16.56.77:8000/recent_queries');
       if (response.ok) {
-        const result = await response.json();
-        setUploadedFile(file);
-        setUploadedTableName(result.table_name);
-        
-        // Fetch table preview after successful upload
-        try {
-          const preview = await ApiService.getTablePreview(result.table_name);
-          setTablePreview(preview);
-        } catch (previewError) {
-          console.error('Failed to fetch table preview:', previewError);
-        }
-      } else {
-        const error = await response.text();
-        alert(`Upload failed: ${error}`);
+        const data = await response.json();
+        setRecentQueries(data.recent_queries || []);
       }
     } catch (error) {
-      console.error('Upload error:', error);
-      alert('Upload failed. Please try again.');
-    } finally {
-      setIsUploading(false);
-      // Clear the file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      console.log('Failed to fetch recent queries:', error);
+      // Fail silently, just show empty recent queries
+    }
+  };
+
+  const fetchTables = async () => {
+    try {
+      const response = await fetch('http://10.16.56.77:8000/tables');
+      if (response.ok) {
+        const data = await response.json();
+        setTables(data.tables || []);
       }
+    } catch (error) {
+      console.log('Failed to fetch tables:', error);
+      // Fail silently, just show empty tables
     }
   };
 
-  const handleFileButtonClick = () => {
-    fileInputRef.current?.click();
+  const handleQueryClick = (query: string) => {
+    navigate(`/chat?query=${encodeURIComponent(query)}`);
   };
 
-  const removeUploadedFile = () => {
-    setUploadedFile(null);
-    setUploadedTableName(null);
-    setTablePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const formatQueryDisplay = (query: string, maxLength: number = 35) => {
+    return query.length > maxLength ? `${query.substring(0, maxLength)}...` : query;
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleSearch(e as any);
+  const formatTableName = (tableName: string) => {
+    if (tableName.startsWith('uploaded_')) {
+      return tableName.replace('uploaded_', '').replace(/_/g, ' ');
     }
+    return tableName.replace(/_/g, ' ');
   };
+
+  // Hardcoded frequently searched queries
+  const frequentQueries = [
+    "What is the totalUSD by category of operationsExpenses.projectedOPEX?",
+    "What is the totalUSD by location of operationsExpenses.projectedOPEX?",
+    "Show me all records of operationsExpenses.projectedOPEX",
+    "Show me records of DAS_NPI_Development_Cost_EBR",
+  ];
+
+  // Separate uploaded tables from system tables
+  const uploadedTables = tables.filter(table => table.is_uploaded);
+  const systemTables = tables.filter(table => !table.is_uploaded && table.name !== 'recent_queries');
 
   return (
-    <div className="flex flex-col items-center justify-center mb-12 py-8 relative w-full max-w-6xl">
-      {/* ChatGPT-like File Upload Display */}
-      {uploadedFile && (
-        <div className="mb-4 max-w-5xl w-full">
-          <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm hover:shadow-md transition-shadow">
-            {/* File Type Icon */}
-            <div className="flex-shrink-0">
-              {getFileIcon(uploadedFile.name)}
-            </div>
-            
-            {/* File Info */}
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-medium text-gray-900 truncate">
-                {uploadedFile.name}
-              </span>
-              <span className="text-xs text-gray-500">
-                {formatFileSize(uploadedFile.size)}
-              </span>
-            </div>
-            
-            {/* Remove Button */}
-            <button
-              onClick={removeUploadedFile}
-              className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-              title="Remove file"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <form onSubmit={handleSearch} className="w-full">
-        {/* Advanced Search Bar with Gradient Glow Effect - EXTRA LONG */}
-        <div 
-          className="relative mx-auto max-w-5xl"
-          style={{
-            filter: 'drop-shadow(0 10px 20px rgba(17, 61, 115, 0.1))',
-          }}
-        >
-          <div 
-            className="relative bg-white rounded-2xl border-4 overflow-hidden transition-all duration-300 hover:scale-[1.02] transform"
-            style={{ 
-              borderColor: 'rgba(17, 61, 115, 0.2)',
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,255,0.95) 100%)',
-              backdropFilter: 'blur(10px)',
-              boxShadow: '0 20px 40px rgba(17, 61, 115, 0.1), 0 1px 3px rgba(17, 61, 115, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
-            }}
-          >
-            
-            <div className="flex items-center px-10 py-3 gap-4">
-              {/* Command Icon */}
-              <div className="flex-shrink-0">
-                <svg className="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              
-              {/* Search Input - LONG & NARROW */}
-              <textarea
-                className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none text-lg placeholder:text-gray-400 resize-none min-h-[50px] py-3 leading-relaxed w-full"
-                placeholder="Enter your text or upload a file for data query..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                style={{ fontFamily: 'inherit', minWidth: '0' }}
-              />
-
-              {/* File Upload Button - Integrated */}
-              <div className="flex-shrink-0">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={handleFileButtonClick}
-                  disabled={isUploading}
-                  className="p-2 text-gray-500 hover:text-blue-600 transition-colors disabled:opacity-50"
-                  title="Upload CSV or Excel file"
-                >
-                  {isUploading ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                  ) : (
-                    <Upload className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-              
-              {/* Execute Button - COMPACT */}
-              <button 
-                type="submit"
-                disabled={isLoading || !searchQuery.trim()}
-                className="inline-flex items-center gap-2 px-6 py-3 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-base shadow-xl hover:shadow-2xl flex-shrink-0"
-                style={{ 
-                  backgroundColor: '#113D73',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0e3560'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#113D73'}
-              >
-                {isLoading ? (
-                  <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                )}
-                Execute
-              </button>
-            </div>
-          </div>
-        </div>
-      </form>
-
-      {/* Table Preview - Below Search Bar */}
-      {tablePreview && (
-        <div className="mt-6 max-w-5xl w-full">
-          <TablePreview
-            tableName={tablePreview.table_name}
-            columns={tablePreview.columns}
-            rows={tablePreview.rows.slice(0, 2)}
-            totalRows={tablePreview.total_rows}
-            fileName={uploadedFile?.name}
+    <aside className="w-72 bg-gray-100 text-gray-700 min-h-screen flex flex-col">
+      {/* Fixed Logo Section */}
+      <div className="flex-shrink-0 p-8 pb-4">
+        <div className="flex items-center space-x-2">
+          <img 
+            src="/Skyworks_logo.PNG" 
+            alt="Skyworks Logo" 
+            className="h-13 w-auto"
           />
         </div>
-      )}
-    </div>
+      </div>
+
+      {/* Scrollable Navigation Section */}
+      <div className="flex-1 overflow-y-auto px-8 pb-8">
+        <nav className="flex flex-col space-y-8">
+          <div className="space-y-2">
+            <button 
+              onClick={() => navigate('/')}
+              className="flex items-center space-x-3 hover:text-gray-900 transition-colors w-full text-left"
+            >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+              </svg>
+              <span className="font-bold" style={{ color: '#113D73' }}>New Data Query</span>
+            </button>
+          </div>
+
+          {/* Frequently Searched (Hardcoded) */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-3">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+              </svg>
+              <span className="font-bold" style={{ color: '#113D73' }}>Frequently Searched </span>
+            </div>
+            {frequentQueries.map((query, index) => (
+              <button
+                key={index}
+                onClick={() => handleQueryClick(query)}
+                className="block hover:text-gray-900 hover:bg-gray-200 transition-colors text-sm pl-9 py-1 rounded w-full text-left"
+              >
+                {formatQueryDisplay(query)}
+              </button>
+            ))}
+          </div>
+          
+          {/* Recent Queries (From Database) */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-3">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                <path fillRule="evenodd" d="M4 5a2 2 0 012-2v1a1 1 0 001 1h6a1 1 0 001-1V3a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+              </svg>
+              <span className="font-bold" style={{ color: '#113D73' }}>Recent Queries</span>
+            </div>
+            {recentQueries.length > 0 ? (
+              recentQueries.map((query, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleQueryClick(query.query_text)}
+                  className="block hover:text-gray-900 hover:bg-gray-200 transition-colors text-sm pl-9 py-1 rounded w-full text-left"
+                  title={query.query_text}
+                >
+                  {formatQueryDisplay(query.query_text)}
+                </button>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500 pl-9">No recent queries</p>
+            )}
+          </div>
+        </nav>
+      </div>
+    </aside>
   );
 };
 
-export default SearchBar; 
+export default Sidebar; 
