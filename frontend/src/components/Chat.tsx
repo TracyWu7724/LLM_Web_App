@@ -8,7 +8,7 @@ import { DebugPanel } from './DebugPanel';
 import TablePreview from './TablePreview';
 import { ApiService } from '../services/api';
 import type { ChatMessage } from '../types/chat';
-import type { QueryResult } from '../types/database';
+import type { QueryResult, TablePreview as TablePreviewType } from '../types/database';
 
 interface ChatProps {
   initialQuery?: string;
@@ -22,10 +22,11 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [showDebugPanel, setShowDebugPanel] = useState(false);
-  const [tablePreview, setTablePreview] = useState<any>(null);
+  const [tablePreview, setTablePreview] = useState<TablePreviewType | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedTableName, setUploadedTableName] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [pendingFileUpload, setPendingFileUpload] = useState<boolean>(false); // Track if file was just uploaded
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,9 +56,40 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
         try {
           const preview = await ApiService.getTablePreview(uploadedTable);
           setTablePreview(preview);
-                  // Try to extract filename from table name  
-        const fileName = uploadedTable.replace('uploaded_', '') + '.xlsx';
-        // Note: In SearchBar style, we only set uploadedFile when actually uploading
+          // Set uploadedTableName for consistency
+          setUploadedTableName(uploadedTable);
+          
+          // Create a File-like object for display purposes
+          // Use actual metadata from backend if available
+          let fileName = uploadedTable.replace('uploaded_', '') + '.csv'; // Default fallback
+          let fileType = 'text/csv';
+          
+          if (preview?.original_filename) {
+            fileName = preview.original_filename;
+            // Determine file type from extension
+            const extension = preview.file_extension || '.csv';
+            if (extension === '.xlsx' || extension === '.xls') {
+              fileType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            } else if (extension === '.csv') {
+              fileType = 'text/csv';
+            }
+          }
+          
+          const fakeFile = new File([''], fileName, { type: fileType });
+          setUploadedFile(fakeFile);
+          
+          // Only create an initial message if there's no initialQuery coming
+          // This prevents the "disappearing" effect when navigating from home page
+          if (messages.length === 0 && !initialQuery) {
+            const initialMessage: ChatMessage = {
+              id: Date.now().toString(),
+              type: 'user',
+              content: `Using uploaded data: ${fileName}`,
+              timestamp: new Date(),
+              hasFileUpload: true,
+            };
+            setMessages([initialMessage]);
+          }
         } catch (error) {
           console.error('Failed to fetch table preview:', error);
         }
@@ -65,23 +97,22 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
       
       fetchTablePreview();
     }
-  }, [uploadedTable]);
+  }, [uploadedTable, messages.length, initialQuery]);
 
-  const executeQuery = async (query: string, tableToUse?: string): Promise<{ results?: QueryResult[], error?: string }> => {
-    try {
-      setLoadingStep('Analyzing your question...');
-      // Add a small delay to show the step
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      setLoadingStep('Generating SQL query...');
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      setLoadingStep('Executing query...');
-      
-      // Use the real API service to execute natural language queries
-      // Priority: newly uploaded table > prop table
-      const tableForQuery = tableToUse || uploadedTableName || uploadedTable;
-      const result = await ApiService.executeNaturalLanguageQuery(query, tableForQuery);
+     const executeQuery = async (query: string, tableToUse?: string): Promise<{ results?: QueryResult[], error?: string, sql_query?: string, warning?: string }> => {
+     try {
+       setLoadingStep('Analyzing your question...');
+       // Add a small delay to show the step
+       await new Promise(resolve => setTimeout(resolve, 100));
+       
+       setLoadingStep('Generating SQL query...');
+       await new Promise(resolve => setTimeout(resolve, 100));
+       
+       setLoadingStep('Executing query...');
+       
+       // Use the real API service to execute natural language queries
+       // Use the explicitly passed table, don't fall back to uploaded tables unless specified
+       const result = await ApiService.executeNaturalLanguageQuery(query, tableToUse);
       
       setLoadingStep('Formatting results...');
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -100,12 +131,65 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
   const handleSendMessage = async (messageContent: string = inputValue) => {
     if (!messageContent.trim()) return;
 
+    // Check if user is asking about specific Databricks tables
+    const messageContentLower = messageContent.toLowerCase();
+    const askingAboutDatabricksTable = messageContentLower.includes('das_') || 
+                                     messageContentLower.includes('swks_das_dev') ||
+                                     messageContentLower.includes('databricks') ||
+                                     messageContentLower.includes('database') ||
+                                     messageContentLower.includes('tables') ||
+                                     messageContentLower.includes('table') ||
+                                     messageContentLower.includes('cost') ||
+                                     messageContentLower.includes('development') ||
+                                     messageContentLower.includes('npi') ||
+                                     messageContentLower.includes('gold') ||
+                                     messageContentLower.includes('schema');
+
+    // Check if user explicitly wants uploaded data
+    const explicitlyAboutUploadedData = messageContentLower.includes('uploaded') ||
+                                       messageContentLower.includes('my data') ||
+                                       messageContentLower.includes('my file') ||
+                                       messageContentLower.includes('csv') ||
+                                       messageContentLower.includes('excel');
+
+    // Check if this should be treated as a file upload query
+    // Only treat as file upload query if:
+    // 1. There's a pending file upload (new upload in chat), OR
+    // 2. This is the initial query from home page with uploaded data, OR  
+    // 3. User explicitly wants uploaded data, OR
+    // 4. User is not asking about Databricks tables and there's uploaded data (default to uploaded)
+    const isInitialQueryWithUpload = !!initialQuery && messageContent === initialQuery && !!(uploadedTableName || uploadedTable);
+    const hasUploadedData = !!(uploadedTableName || uploadedTable);
+    const isFileUploadQuery = pendingFileUpload || 
+                             isInitialQueryWithUpload || 
+                             explicitlyAboutUploadedData ||
+                             (!askingAboutDatabricksTable && hasUploadedData && !pendingFileUpload);
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'user',
       content: messageContent.trim(),
       timestamp: new Date(),
+      hasFileUpload: isFileUploadQuery, // Attach file upload only when relevant
     };
+
+    // Always clear hasFileUpload from previous messages to ensure clean context
+    if (isFileUploadQuery) {
+      // This message is about uploaded data - show upload preview
+      setMessages(prev => [
+        ...prev.map(msg => ({ ...msg, hasFileUpload: false })), // Clear from ALL previous messages
+        userMessage
+      ]);
+      if (pendingFileUpload) {
+        setPendingFileUpload(false); // Reset pending flag for new uploads
+      }
+    } else {
+      // This message is about Databricks - clear all upload previews
+      setMessages(prev => [
+        ...prev.map(msg => ({ ...msg, hasFileUpload: false })), // Clear from ALL previous messages
+        userMessage
+      ]);
+    }
 
     const loadingMessage: ChatMessage = {
       id: (Date.now() + 1).toString(),
@@ -115,7 +199,7 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
       isLoading: true,
     };
 
-    setMessages(prev => [...prev, userMessage, loadingMessage]);
+    setMessages(prev => [...prev, loadingMessage]);
     setInputValue('');
     setIsLoading(true);
 
@@ -133,10 +217,10 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
     }
 
     try {
-      // Determine which table to use for the query
-      // Priority: newly uploaded table in chat > table from props
-      const tableForQuery = uploadedTableName || uploadedTable;
-      const { results, error } = await executeQuery(messageContent, tableForQuery);
+      // Determine which table to use for the query based on message context
+      // Only use uploaded table if this message is specifically about uploaded data
+      const tableForQuery = isFileUploadQuery ? (uploadedTableName || uploadedTable) : undefined;
+      const { results, error, sql_query, warning } = await executeQuery(messageContent, tableForQuery);
       
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -149,6 +233,8 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
         timestamp: new Date(),
         results,
         error,
+        sql_query,
+        warning,
       };
 
       setMessages(prev => prev.slice(0, -1).concat(assistantMessage));
@@ -234,6 +320,9 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
             console.warn('Failed to get table preview:', previewError);
           }
         }
+
+        // Set flag to attach upload to next user message
+        setPendingFileUpload(true);
       } else {
         alert(`Upload failed: ${result.error}`);
       }
@@ -253,6 +342,9 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
     setUploadedFile(null);
     setUploadedTableName(null);
     setTablePreview(null);
+    // Clear hasFileUpload flag from all messages
+    setMessages(prev => prev.map(msg => ({ ...msg, hasFileUpload: false })));
+    setPendingFileUpload(false); // Reset pending file upload flag
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -348,13 +440,13 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
                   </div>
                   
                   {/* Show table preview below user messages when uploaded table exists */}
-                  {message.type === 'user' && (uploadedTableName || uploadedTable) && tablePreview && !message.isLoading && (
+                  {message.type === 'user' && message.hasFileUpload && tablePreview && !message.isLoading && (
                     <TablePreview
                       tableName={tablePreview.table_name}
                       columns={tablePreview.columns}
                       rows={tablePreview.rows}
                       totalRows={tablePreview.total_rows}
-                      fileName={uploadedFile?.name || undefined}
+                      fileName={uploadedFile?.name || (uploadedTableName || uploadedTable)?.replace('uploaded_', '') + '.xlsx'}
                     />
                   )}
                   
@@ -364,11 +456,13 @@ const Chat: React.FC<ChatProps> = ({ initialQuery = '', uploadedTable }) => {
                       <QueryOutput
                         results={message.results || []}
                         error={message.error || ''}
+                        sql_query={message.sql_query}
+                        warning={message.warning}
                         onClose={() => {
                           // Remove the results from this message
                           setMessages(prev => prev.map(msg => 
                             msg.id === message.id 
-                              ? { ...msg, results: undefined, error: undefined }
+                              ? { ...msg, results: undefined, error: undefined, sql_query: undefined, warning: undefined }
                               : msg
                           ));
                         }}
