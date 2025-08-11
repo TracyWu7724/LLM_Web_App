@@ -1,10 +1,28 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import Sidebar from "./Sidebar";
 import SearchBar from "./SearchBar";
 
 const Home: React.FC = () => {
   const [hasOutput, setHasOutput] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSearch = async (query: string, uploadedTable?: string) => {
+    setIsLoading(true);
+    console.log("Navigating to chat with query:", query, "uploaded table:", uploadedTable);
+    
+    // Navigate to chat page with the query and uploaded table as URL parameters
+    const params = new URLSearchParams();
+    params.append('query', query);
+    if (uploadedTable) {
+      params.append('uploaded_table', uploadedTable);
+    }
+    navigate(`/chat?${params.toString()}`);
+    
+    setIsLoading(false);
+  };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -12,9 +30,9 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-white text-gray-900 overflow-hidden">
+    <div className="flex min-h-screen bg-white text-gray-900">
       <Sidebar />
-      <div className="flex-1 flex items-start justify-center pt-48">
+      <div className="flex-1 flex items-start justify-center pt-48 pb-12 overflow-y-auto">
         <div className="flex flex-col items-center space-y-8 max-w-7xl w-full px-4">
           {/* Title Section */}
           <div className="text-center space-y-4">
@@ -42,7 +60,7 @@ const Home: React.FC = () => {
                     exit={{ opacity: 0 }}
                     className="text-2xl md:text-4xl lg:text-5xl font-bold mb-4 md:mb-6 tracking-tight text-gray-900" style={{ color: '#113D73' }}
                   >
-                    DAS TAM Eng Ops Data Analytics and Insights
+                    DAS TAM Analytics and Insights
                     
                   </motion.h1>
                   <motion.p 
@@ -60,7 +78,7 @@ const Home: React.FC = () => {
           </div>
           
           {/* Search Bar */}
-          <SearchBar />
+          <SearchBar onSearch={handleSearch} isLoading={isLoading} />
         </div>
       </div>
     </div>
