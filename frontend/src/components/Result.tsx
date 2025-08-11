@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { XCircle, Table as TableIcon, Download, ChevronUp, ChevronDown, FileSpreadsheet, Maximize2, Minimize2 } from 'lucide-react'
+import { XCircle, Table as TableIcon, Download, ChevronUp, ChevronDown, FileSpreadsheet, Maximize2, Minimize2, Code, Copy, Check } from 'lucide-react'
 import type { QueryResult } from '../types/database'
 import { useRef, useEffect, useState, useMemo } from 'react'
 import { ApiService } from '../services/api'
@@ -10,6 +10,8 @@ interface QueryOutputProps {
   results: QueryResult[]
   error: string
   onClose: () => void
+  sql_query?: string
+  warning?: string
 }
 
 const formatErrorMessage = (error: string) => {
@@ -43,7 +45,7 @@ const formatErrorMessage = (error: string) => {
   }
 }
 
-export function QueryOutput({ results, error, onClose }: QueryOutputProps) {
+export function QueryOutput({ results, error, onClose, sql_query, warning }: QueryOutputProps) {
   const headerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [sortConfig, setSortConfig] = useState<{
@@ -51,6 +53,8 @@ export function QueryOutput({ results, error, onClose }: QueryOutputProps) {
     direction: 'asc' | 'desc' | null;
   }>({ column: '', direction: null });
   const [isZoomedIn, setIsZoomedIn] = useState(false);
+  const [showSQL, setShowSQL] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
 
   useEffect(() => {
     const headerEl = headerRef.current;
@@ -107,6 +111,22 @@ export function QueryOutput({ results, error, onClose }: QueryOutputProps) {
 
   const handleToggleZoom = () => {
     setIsZoomedIn(!isZoomedIn);
+  };
+
+  const handleCopySQL = async () => {
+    if (sql_query) {
+      try {
+        await navigator.clipboard.writeText(sql_query);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      } catch (error) {
+        console.error('Failed to copy SQL:', error);
+      }
+    }
+  };
+
+  const handleToggleSQL = () => {
+    setShowSQL(!showSQL);
   };
 
   const sortedResults = useMemo(() => {
@@ -223,6 +243,15 @@ export function QueryOutput({ results, error, onClose }: QueryOutputProps) {
                   </h3>
                 </div>
                 <div className="flex items-center gap-2">
+                  {!error && sql_query && (
+                    <button
+                      onClick={handleToggleSQL}
+                      className="text-muted-foreground hover:text-foreground transition-colors p-2 hover:bg-muted/50 rounded-lg"
+                      title={showSQL ? "Hide SQL" : "Show SQL"}
+                    >
+                      <Code className="w-5 h-5" />
+                    </button>
+                  )}
                   {!error && (
                     <>
                       <button
@@ -251,6 +280,45 @@ export function QueryOutput({ results, error, onClose }: QueryOutputProps) {
                   
                 </div>
               </div>
+
+              {/* SQL Query Display */}
+              {showSQL && sql_query && (
+                <div className="px-6 py-4 border-b border-border/40 bg-muted/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Generated SQL Query</h4>
+                    <button
+                      onClick={handleCopySQL}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs bg-background border border-border rounded-md hover:bg-muted/50 transition-colors"
+                      title="Copy SQL to clipboard"
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="w-3 h-3 text-green-600" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          Copy SQL
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto">
+                    <pre className="text-sm font-mono whitespace-pre-wrap">{sql_query}</pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Warning Display */}
+              {warning && !error && (
+                <div className="px-6 py-3 bg-yellow-50 border-b border-yellow-200">
+                  <div className="flex items-start gap-2">
+                    <div className="w-4 h-4 text-yellow-600 mt-0.5">⚠️</div>
+                    <div className="text-sm text-yellow-800">{warning}</div>
+                  </div>
+                </div>
+              )}
 
               {/* Content */}
               <div className="p-6">
