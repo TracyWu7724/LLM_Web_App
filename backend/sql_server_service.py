@@ -1,7 +1,12 @@
 import os
 import pandas as pd
 from typing import List, Dict, Any, Optional
-import pyodbc
+try:
+    import pyodbc
+    PYODBC_AVAILABLE = True
+except ImportError:
+    PYODBC_AVAILABLE = False
+    print("Warning: pyodbc not available - SQL Server functionality disabled")
 from dotenv import load_dotenv
 import sqlite3
 import logging
@@ -96,6 +101,9 @@ class SQLServerService:
     
     def _init_connection_pool(self):
         """Initialize the connection pool"""
+        if not PYODBC_AVAILABLE:
+            logger.warning("pyodbc not available - skipping SQL Server connection pool initialization")
+            return
         try:
             connection_string = self.get_connection_string()
             self.connection_pool = ConnectionPool(connection_string, max_connections=5, timeout=30)

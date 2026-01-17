@@ -82,11 +82,11 @@ const Sidebar: React.FC = () => {
       {/* Fixed Logo Section */}
       <div className="flex-shrink-0 p-8 pb-4">
         <div className="flex items-center space-x-2">
-          <img 
+          {/* <img 
             src="/Skyworks_logo.PNG" 
             alt="Skyworks Logo" 
             className="h-13 w-auto"
-          />
+          /> */}
         </div>
       </div>
 

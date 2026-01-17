@@ -1,190 +1,135 @@
 # SQL Query Assistant
 
-A full-stack application that allows users to query databases using natural language, powered by FastAPI and React.
+A full-stack application that enables users to query databases using natural language. The system leverages Large Language Models (LLMs) to translate user questions into SQL queries, executes them against connected databases, and presents results through an interactive web interface.
 
-## 🚀 Quick Start
 
-#### 1. Backend Setup (FastAPI + Database)
+## Features
+
+- **Natural Language to SQL**: Convert plain English questions into SQL queries using AI
+- **Interactive Chat Interface**: Conversational UI for seamless database interactions
+- **Real-time Query Execution**: Execute queries and display results instantly
+- **Multiple Database Support**: Connect to SQL Server, SQLite, Databricks, and other databases
+- **Data Export**: Download query results as CSV or Excel files
+- **Query History**: Track and revisit previous queries
+- **Network Access**: Access the application from multiple devices on the same network
+
+## Prerequisites
+
+- Python 3.8 or higher
+- Node.js 16.x or higher
+- npm or yarn package manager
+- Database connection (SQL Server, SQLite, etc.)
+
+## Installation
+
 
 ```bash
-# Navigate to backend directory
+# Clone the repository
+git clone https://github.com/TracyWu7724/LLM_Web_App.git
+cd LLM_Web_App
+
+# Install the backend dependencies
 cd backend
+pip3 install -r requirements.txt
 
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Start the FastAPI server
-python app.py
-```
-
-#### 2. Frontend Setup (React)
-
-```bash
-# Navigate to frontend directory  
-cd frontend
-
-# Install Node.js dependencies
+# Install the frontend dependencies
 npm install
 
-# Start the React development server
+```
+
+
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the `backend` directory with the following variables:
+
+```env
+# Database Configuration
+DB_SERVER=your_server_address
+DB_NAME=your_database_name
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
+
+# LLM API Configuration
+OPENAI_API_KEY=your_openai_api_key
+# or
+ANTHROPIC_API_KEY=your_anthropic_api_key
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+```
+
+## Quick Start
+
+
+```bash
+# Start the backend server
+cd backend
+python3 app.py
+
+# Start the frontend application
+# From project root
 npm start
 ```
 
-## 🌐 Network Access
+## API Endpoints
 
-### Local Access
-- **Backend API**: http://localhost:8000
-- **Frontend App**: http://localhost:3000
-- **API Documentation**: http://localhost:8000/docs
-
-> **Note**: Replace `10.16.56.77` with your actual local IP address. To find your IP:
-> ```bash
-> ipconfig | findstr /i "IPv4"
-> ```
-
-### Firewall Configuration (if needed)
-If other devices can't connect, allow the ports through Windows Firewall:
-```powershell
-# Run PowerShell as Administrator
-netsh advfirewall firewall add rule name="React Dev Server" dir=in action=allow protocol=TCP localport=3000
-netsh advfirewall firewall add rule name="FastAPI Backend" dir=in action=allow protocol=TCP localport=8000
-```
-
-## 🔧 Features
-
-- **Natural Language to SQL**: Convert questions into SQL queries using AI
-- **Interactive Chat Interface**: Conversational UI for database queries
-- **Real-time Results**: Display query results in interactive tables
-- **Data Export**: Download results as CSV or Excel files
-- **Network Access**: Access from multiple devices on the same network
-- **Responsive Design**: Works on desktop, tablet, and mobile devices
-- **Debug Panel**: Development tools for SQL query inspection
-
-## 🛠️ Technology Stack
-
-### Backend
-- **FastAPI**: Modern Python web framework
-- **LangChain**: AI/ML framework for natural language processing
-- **Google Gemini**: Language model for SQL generation
-- **SQLite**: Lightweight database
-- **Pandas**: Data manipulation and analysis
-- **Uvicorn**: ASGI server
-
-### Frontend
-- **React 19**: Latest JavaScript library for building user interfaces
-- **TypeScript**: Type-safe JavaScript
-- **Tailwind CSS**: Utility-first CSS framework
-- **Framer Motion**: Animation library
-- **Lucide React**: Icon library
-- **React Router**: Client-side routing
-
-## 🔍 API Endpoints
+### Core Endpoints
 
 - `GET /` - API information and available endpoints
 - `GET /health` - Health check and database connection status
-- `POST /query` - Execute natural language queries (generate + execute)
-- `POST /generate_sql` - Generate SQL from natural language only
+- `POST /query` - Execute natural language query (generate SQL + execute)
+- `POST /generate_sql` - Generate SQL from natural language (no execution)
 - `POST /execute_sql` - Execute SQL query directly
+- `GET /tables` - List all available database tables
+- `GET /tables/{table_name}` - Get schema and preview for a specific table
+
+### Data Export
+
 - `GET /download/csv` - Download last query results as CSV
-- `GET /download/excel` - Download last query results as Excel
+- `GET /download/excel` - Download last query results as Excel (.xlsx)
 
-## 🔧 Configuration
+### Query Management
 
-### Backend Configuration
-The backend is configured in `backend/app.py`:
-- **Host**: `0.0.0.0` (accepts connections from any IP)
-- **Port**: `8000`
-- **Database**: SQLite (`data.db`)
+- `GET /query_history` - Retrieve query history
+- `DELETE /query_history` - Clear query history
 
-### Frontend Configuration
-API configuration is in `frontend/src/config/api.ts`:
-- **Base URL**: Configurable via environment variable or defaults to local IP
-- **Timeout**: 15 seconds
-- **Headers**: JSON content type
+## Project Structure
 
-### Environment Variables
-Create a `.env` file in the frontend directory to customize API URL:
 ```
-REACT_APP_API_URL=http://your-custom-ip:8000
-```
+LLM_Web_App/
+├── backend/
+│   ├── app.py                    # FastAPI application entry point
+│   ├── sql_server_service.py     # SQL Server database connector
+│   ├── databricks_service.py     # Databricks integration (if applicable)
+│   ├── cache_service.py          # Query caching service
+│   ├── requirements.txt          # Python dependencies
+│   └── data.db                   # SQLite database (for query history)
+├── public/                       # Static files
+├── src/                          # React source code
+│   ├── components/               # React components
+│   ├── services/                 # API service clients
+│   └── types/                    # TypeScript type definitions
+├── package.json                  # Node.js dependencies
 
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**1. Port 8000 already in use**
-```bash
-# Find process using port 8000
-netstat -ano | findstr :8000
-
-# Kill the process (replace PID with actual process ID)
-taskkill /PID <PID> /F
 ```
 
-**2. Cannot connect to API server**
-- Ensure backend is running: `python backend/app.py`
-- Check health endpoint: http://localhost:8000/health
-- Verify firewall settings if accessing from network
+## Troubleshooting
 
-**3. Frontend won't start**
-```bash
-# Clear npm cache and reinstall
-cd frontend
-npm cache clean --force
-rm -rf node_modules package-lock.json
-npm install
-```
+### Backend Issues
 
-**4. Database errors**
-```bash
-# Reset database
-cd backend
-python init_db.py
-```
+- **Database Connection Failed**: Verify database credentials in `.env` file
+- **LLM API Errors**: Check API key validity and quota limits
+- **Port Already in Use**: Change the port in `app.py` or kill the process using the port
 
-## 🏃‍♂️ Development
+### Frontend Issues
 
-### Backend Development
-```bash
-cd backend
-python app.py
-# API docs available at: http://localhost:8000/docs
-```
+- **Cannot Connect to Backend**: Ensure backend is running and CORS is configured
+- **Build Errors**: Clear node_modules and reinstall: `rm -rf node_modules && npm install`
 
-### Frontend Development
-```bash
-cd frontend
-npm start
-# App available at: http://localhost:3000
-```
 
-### Database Management
-The SQLite database (`backend/data.db`) contains sample data with:
-- **customers** table: Customer information
-- **orders** table: Order records
 
-To reset or modify the database:
-```bash
-cd backend
-python init_db.py
-```
-
-## 📚 Documentation
-
-- [Integration Setup Guide](docs/INTEGRATION_SETUP.md) - Detailed setup instructions
-- [API Documentation](http://localhost:8000/docs) - FastAPI auto-generated docs (when server is running)
-
-## 🚀 Deployment Notes
-
-### Local Network Access
-- Backend binds to `0.0.0.0:8000` for network accessibility
-- Frontend configured to connect via local IP address
-- Use batch files for easy startup on Windows
-
-### Production Considerations
-- Set proper environment variables
-- Configure HTTPS for secure communication
-- Use proper database for production (PostgreSQL, MySQL)
-- Set up proper CORS policies
-- Consider using Docker for containerization
 

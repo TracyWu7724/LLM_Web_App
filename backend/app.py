@@ -14,7 +14,7 @@ from fuzzywuzzy import fuzz
 from typing import List, Dict
 
 from langchain_community.utilities import SQLDatabase
-from langchain_openai import AzureChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 import tempfile
 import string
@@ -471,11 +471,8 @@ def detect_large_dataset_request(question: str) -> tuple[bool, int, int]:
 # Load environment variables
 load_dotenv()
 
-# Azure OpenAI Configuration
-azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION")
-azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+# Google Gemini Configuration
+gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 app = FastAPI(title="SQL Query API", description="API for natural language to SQL queries", version="1.0.0")
 
@@ -492,13 +489,11 @@ sql_server_service = SQLServerService()
 sql_server_service.init_local_db()
 
 # Create LangChain LLM for SQL generation
-llm = AzureChatOpenAI(
-    azure_endpoint=azure_endpoint,
-    api_key=azure_api_key,
-    api_version=azure_api_version,
-    azure_deployment=azure_deployment,
+llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-pro",
+    google_api_key=gemini_api_key,
     temperature=0.0,
-    max_tokens=4000,
+    max_output_tokens=4000,
 )
 
 def generate_sql_server_sql(question: str, table_name: str = "das.das_npi_development_cost_ebr", columns_list: list = None, custom_limit: int = None) -> str:
