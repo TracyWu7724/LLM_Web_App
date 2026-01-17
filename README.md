@@ -53,9 +53,7 @@ DB_USERNAME=your_username
 DB_PASSWORD=your_password
 
 # LLM API Configuration
-OPENAI_API_KEY=your_openai_api_key
-# or
-ANTHROPIC_API_KEY=your_anthropic_api_key
+GEMINI_API_KEY=your_api_key
 
 # Server Configuration
 HOST=0.0.0.0
