@@ -63,6 +63,7 @@ python3 app.py
 
 # Start the frontend application
 # From project root
+cd frontend
 npm start
 ```
 

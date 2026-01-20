@@ -60,7 +60,7 @@ const Home: React.FC = () => {
                     exit={{ opacity: 0 }}
                     className="text-2xl md:text-4xl lg:text-5xl font-bold mb-4 md:mb-6 tracking-tight text-gray-900" style={{ color: '#113D73' }}
                   >
-                    DAS TAM Analytics and Insights
+                    Text-to-SQL for Analytics and Insights
                     
                   </motion.h1>
                   <motion.p 
