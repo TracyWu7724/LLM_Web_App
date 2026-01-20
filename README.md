@@ -2,6 +2,7 @@
 
 A full-stack application that enables users to query databases using natural language. The system leverages Large Language Models (LLMs) to translate user questions into SQL queries, executes them against connected databases, and presents results through an interactive web interface.
 
+<img src="./Full Stack Text-to-SQL.png" alt="Website Overview" />
 
 ## Features
 
