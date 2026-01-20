@@ -13,15 +13,8 @@ A full-stack application that enables users to query databases using natural lan
 - **Query History**: Track and revisit previous queries
 - **Network Access**: Access the application from multiple devices on the same network
 
-## Prerequisites
-
-- Python 3.8 or higher
-- Node.js 16.x or higher
-- npm or yarn package manager
-- Database connection (SQL Server, SQLite, etc.)
 
 ## Installation
-
 
 ```bash
 # Clone the repository
@@ -41,7 +34,7 @@ npm install
 
 ## Configuration
 
-### Environment Variables
+### Database configurations
 
 Create a `.env` file in the `backend` directory with the following variables:
 
@@ -127,7 +120,6 @@ LLM_Web_App/
 
 - **Cannot Connect to Backend**: Ensure backend is running and CORS is configured
 - **Build Errors**: Clear node_modules and reinstall: `rm -rf node_modules && npm install`
-
 
 
 
